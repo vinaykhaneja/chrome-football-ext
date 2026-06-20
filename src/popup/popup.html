@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Football Match Tracker</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-top">
+      <h1>⚽ Match Tracker</h1>
+      <div class="header-actions">
+        <button id="refresh-btn" class="icon-btn" title="Refresh">↻</button>
+        <button id="settings-btn" class="icon-btn" title="Settings">⚙</button>
+      </div>
+    </div>
+    <div id="demo-banner" class="banner hidden">
+      Demo mode — sample matches only. Add your API key in settings for real fixtures.
+    </div>
+    <div id="updated-banner" class="banner subtle hidden"></div>
+    <div id="error-banner" class="banner error hidden"></div>
+    <nav class="tabs" role="tablist">
+      <button class="tab active" data-tab="today">Today</button>
+      <button class="tab" data-tab="live">Live <span id="live-count" class="badge hidden">0</span></button>
+      <button class="tab" data-tab="tomorrow">Tomorrow</button>
+      <button class="tab" data-tab="week">This week</button>
+      <button class="tab" data-tab="reminders">Reminders</button>
+    </nav>
+    <div class="search-row">
+      <input type="search" id="search-input" placeholder="Search teams or competitions…" />
+    </div>
+  </header>
+
+  <main id="content">
+    <div id="loading" class="loading">Loading matches…</div>
+    <div id="match-list" class="match-list hidden"></div>
+    <div id="reminder-list" class="reminder-list hidden"></div>
+    <div id="empty-state" class="empty hidden">
+      <p>No matches found.</p>
+      <p class="muted">Try enabling more competitions in settings.</p>
+    </div>
+  </main>
+
+  <script type="module" src="popup.js"></script>
+</body>
+</html>

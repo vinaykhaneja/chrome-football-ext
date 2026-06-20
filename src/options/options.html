@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Football Match Tracker — Settings</title>
+  <link rel="stylesheet" href="options.css" />
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <h1>⚽ Football Match Tracker</h1>
+      <p class="subtitle">Choose competitions, set reminders, and personalize your match feed.</p>
+    </header>
+
+    <section class="card">
+      <h2>API Configuration</h2>
+      <p class="help">
+        Get a free API key from
+        <a href="https://www.football-data.org/client/register" target="_blank" rel="noopener">football-data.org</a>.
+        The free tier includes 12 major competitions with fixtures and delayed scores.
+      </p>
+      <label class="field">
+        <span>API Key</span>
+        <input type="password" id="api-key" placeholder="Paste your X-Auth-Token" autocomplete="off" />
+      </label>
+      <label class="checkbox-row">
+        <input type="checkbox" id="demo-mode" />
+        <span>Use demo mode (sample matches, no API key needed)</span>
+      </label>
+      <button id="save-api" class="btn primary">Save API Settings</button>
+      <p id="api-status" class="status hidden"></p>
+    </section>
+
+    <section class="card">
+      <h2>Appearance</h2>
+      <label class="field">
+        <span>Theme</span>
+        <select id="theme">
+          <option value="system">System</option>
+          <option value="dark">Dark</option>
+          <option value="light">Light</option>
+        </select>
+      </label>
+      <label class="field">
+        <span>Timezone</span>
+        <select id="timezone">
+          <option value="auto">Auto (browser local)</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="card">
+      <h2>Default Reminders</h2>
+      <p class="help">Automatically set a reminder for every upcoming match in followed competitions.</p>
+      <label class="field">
+        <span>Default reminder before kickoff</span>
+        <select id="default-reminder">
+          <option value="">None</option>
+          <option value="30">30 minutes</option>
+          <option value="60">1 hour</option>
+          <option value="120">2 hours</option>
+        </select>
+      </label>
+    </section>
+
+    <section class="card">
+      <div class="section-header">
+        <h2>Competitions</h2>
+        <div class="section-actions">
+          <button id="select-all" class="btn">Select All</button>
+          <button id="select-none" class="btn">Deselect All</button>
+          <button id="select-free" class="btn">Free Tier Only</button>
+          <button id="select-fifa" class="btn">FIFA Only</button>
+        </div>
+      </div>
+      <input type="search" id="comp-search" class="search" placeholder="Search competitions…" />
+      <div id="competition-list" class="competition-list"></div>
+      <p class="help muted">Competitions without an API code require a paid football-data.org plan. They are listed for future support.</p>
+    </section>
+
+    <section class="card">
+      <h2>Favorite Teams</h2>
+      <p class="help">Search and add clubs to pin their matches to the top.</p>
+      <div class="search-team-row">
+        <input type="search" id="team-search" placeholder="Search teams (requires API key)…" />
+        <button id="team-search-btn" class="btn">Search</button>
+      </div>
+      <div id="team-results" class="team-results hidden"></div>
+      <div id="favorite-teams" class="chip-list"></div>
+    </section>
+
+    <section class="card">
+      <h2>Favorite Competitions</h2>
+      <div id="favorite-comps" class="chip-list"></div>
+    </section>
+
+    <footer class="footer">
+      <button id="save-all" class="btn primary large">Save All Settings</button>
+    </footer>
+  </div>
+
+  <script type="module" src="options.js"></script>
+</body>
+</html>
