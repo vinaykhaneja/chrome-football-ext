@@ -1,12 +1,15 @@
-import { getApiCodesForEnabled, TOURNAMENT_CODES } from './competitions.js';
+import { getApiCodesForEnabled } from './competitions.js';
 import { getSettings, setMatchesCache, getMatchesCache, clearMatchesCache } from './storage.js';
 import { addDays, toDateString } from './utils.js';
 
 const API_BASE = 'https://api.football-data.org/v4';
-const CACHE_TTL_MS = 5 * 60 * 1000;
+const CACHE_TTL_MS = 10 * 60 * 1000;
 const LIVE_CACHE_TTL_MS = 60 * 1000;
-const BATCH_SIZE = 8;
+const BATCH_SIZE = 12;
 const MAX_FETCH_DAYS = 8; // yesterday through +8 days = 10 calendar days (API max)
+const BATCH_DELAY_MS = 6500; // free tier allows ~10 requests/minute
+
+let fetchInFlight = null;
 
 export function normalizeMatch(raw) {
   const status = mapStatus(raw.status);
@@ -71,11 +74,6 @@ function getDateWindow() {
   };
 }
 
-function getSeasonYears() {
-  const year = new Date().getFullYear();
-  return [year, year - 1];
-}
-
 function pruneStaleMatches(matches) {
   const cutoff = Date.now() - 36 * 60 * 60 * 1000;
   const horizon = addDays(new Date(), MAX_FETCH_DAYS).getTime();
@@ -113,13 +111,59 @@ function isCacheStillRelevant(cached, cacheTime) {
   return hasRecentFinished && age < CACHE_TTL_MS;
 }
 
-async function apiFetch(url, apiKey) {
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function parseRetrySeconds(body, retryAfterHeader) {
+  if (retryAfterHeader && /^\d+$/.test(retryAfterHeader)) {
+    return Number(retryAfterHeader);
+  }
+  const match = body.match(/Wait (\d+) seconds?/i);
+  return match ? Number(match[1]) : 60;
+}
+
+async function getApiCooldownUntil() {
+  const { apiCooldownUntil = 0 } = await chrome.storage.local.get('apiCooldownUntil');
+  return apiCooldownUntil;
+}
+
+async function setApiCooldown(seconds) {
+  const until = Date.now() + seconds * 1000;
+  await chrome.storage.local.set({ apiCooldownUntil: until });
+  return until;
+}
+
+function isRateLimitError(err) {
+  return err?.isRateLimit || String(err?.message || '').includes('429');
+}
+
+async function apiFetch(url, apiKey, retries = 1) {
+  const cooldownUntil = await getApiCooldownUntil();
+  const waitMs = cooldownUntil - Date.now();
+  if (waitMs > 0) {
+    await sleep(waitMs);
+  }
+
   const res = await fetch(url, {
     headers: { 'X-Auth-Token': apiKey },
   });
 
   if (res.status === 403 || res.status === 404) {
     return [];
+  }
+
+  if (res.status === 429) {
+    const body = await res.text();
+    const retrySec = parseRetrySeconds(body, res.headers.get('Retry-After'));
+    await setApiCooldown(retrySec);
+    if (retries > 0) {
+      await sleep(retrySec * 1000 + 500);
+      return apiFetch(url, apiKey, retries - 1);
+    }
+    const err = new Error(`API error 429: ${body.slice(0, 160)}`);
+    err.isRateLimit = true;
+    throw err;
   }
 
   if (!res.ok) {
@@ -131,8 +175,9 @@ async function apiFetch(url, apiKey) {
   return data.matches || [];
 }
 
-async function fetchLeagueBatch(apiKey, codes, dateFrom, dateTo, bucket) {
+async function fetchMatchBatches(apiKey, codes, dateFrom, dateTo, bucket) {
   for (let i = 0; i < codes.length; i += BATCH_SIZE) {
+    if (i > 0) await sleep(BATCH_DELAY_MS);
     const batch = codes.slice(i, i + BATCH_SIZE);
     const url = `${API_BASE}/matches?dateFrom=${dateFrom}&dateTo=${dateTo}&competitions=${batch.join(',')}`;
     const raw = await apiFetch(url, apiKey);
@@ -142,43 +187,33 @@ async function fetchLeagueBatch(apiKey, codes, dateFrom, dateTo, bucket) {
   }
 }
 
-async function fetchTournamentMatches(apiKey, code, dateFrom, dateTo, bucket) {
-  for (const season of getSeasonYears()) {
-    const url = `${API_BASE}/competitions/${code}/matches?dateFrom=${dateFrom}&dateTo=${dateTo}&season=${season}`;
-    const raw = await apiFetch(url, apiKey);
-    for (const match of raw) {
-      bucket.set(match.id, match);
-    }
-    if (raw.length) break;
-  }
-}
-
 async function fetchFromApi(apiKey, enabledCompetitionIds) {
-  const codes = [...new Set(getApiCodesForEnabled(enabledCompetitionIds))];
-  if (!codes.length) return [];
+  if (fetchInFlight) return fetchInFlight;
 
-  const { dateFrom, dateTo } = getDateWindow();
-  const bucket = new Map();
+  fetchInFlight = (async () => {
+    const codes = [...new Set(getApiCodesForEnabled(enabledCompetitionIds))];
+    if (!codes.length) return [];
 
-  const leagueCodes = codes.filter((c) => !TOURNAMENT_CODES.has(c));
-  const tournamentCodes = codes.filter((c) => TOURNAMENT_CODES.has(c));
+    const { dateFrom, dateTo } = getDateWindow();
+    const bucket = new Map();
 
-  if (leagueCodes.length) {
-    await fetchLeagueBatch(apiKey, leagueCodes, dateFrom, dateTo, bucket);
+    await fetchMatchBatches(apiKey, codes, dateFrom, dateTo, bucket);
+
+    const matches = [...bucket.values()]
+      .map(normalizeMatch)
+      .filter((m) => {
+        const kickoff = m.utcDate.slice(0, 10);
+        return kickoff >= dateFrom && kickoff <= dateTo;
+      });
+
+    return pruneStaleMatches(matches);
+  })();
+
+  try {
+    return await fetchInFlight;
+  } finally {
+    fetchInFlight = null;
   }
-
-  for (const code of tournamentCodes) {
-    await fetchTournamentMatches(apiKey, code, dateFrom, dateTo, bucket);
-  }
-
-  const matches = [...bucket.values()]
-    .map(normalizeMatch)
-    .filter((m) => {
-      const kickoff = m.utcDate.slice(0, 10);
-      return kickoff >= dateFrom && kickoff <= dateTo;
-    });
-
-  return pruneStaleMatches(matches);
 }
 
 function getDemoMatches() {
@@ -277,8 +312,14 @@ export async function fetchMatches({ force = false } = {}) {
     return { matches, fromCache: false, cacheTime: Date.now() };
   } catch (err) {
     const pruned = cached ? pruneStaleMatches(cached) : [];
-    if (pruned.length && isCacheStillRelevant(pruned, cacheTime)) {
-      return { matches: pruned, fromCache: true, error: err.message, cacheTime };
+    if (
+      pruned.length &&
+      (isRateLimitError(err) || isCacheStillRelevant(pruned, cacheTime))
+    ) {
+      const message = isRateLimitError(err)
+        ? 'Rate limited — showing cached matches. Try again in a minute.'
+        : err.message;
+      return { matches: pruned, fromCache: true, error: message, cacheTime };
     }
     await clearMatchesCache();
     await chrome.storage.local.set({ lastRefreshError: err.message });

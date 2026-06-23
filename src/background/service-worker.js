@@ -5,15 +5,15 @@ import {
   rescheduleAllReminders,
   applyDefaultReminders,
 } from '../lib/reminders.js';
-import { getSettings, clearMatchesCache, saveSettings } from '../lib/storage.js';
+import { getSettings, getMatchesCache, clearMatchesCache, saveSettings } from '../lib/storage.js';
 import { DEFAULT_ENABLED } from '../lib/competitions.js';
 
 const REFRESH_ALARM = 'refresh-matches';
 
 async function updateBadge() {
   try {
-    const { matches } = await fetchMatches();
-    const live = countLiveMatches(matches);
+    const { matches } = await getMatchesCache();
+    const live = countLiveMatches(matches || []);
     if (live > 0) {
       await chrome.action.setBadgeText({ text: String(live) });
       await chrome.action.setBadgeBackgroundColor({ color: '#e53935' });
@@ -33,7 +33,7 @@ async function refreshMatches(force = false) {
 }
 
 async function setupAlarms() {
-  await chrome.alarms.create(REFRESH_ALARM, { periodInMinutes: 2 });
+  await chrome.alarms.create(REFRESH_ALARM, { periodInMinutes: 10 });
   await rescheduleAllReminders();
 }
 
@@ -55,12 +55,12 @@ chrome.runtime.onInstalled.addListener(async (details) => {
 
 chrome.runtime.onStartup.addListener(async () => {
   await setupAlarms();
-  await refreshMatches(true);
+  await refreshMatches(false);
 });
 
 chrome.alarms.onAlarm.addListener(async (alarm) => {
   if (alarm.name === REFRESH_ALARM) {
-    await refreshMatches(true);
+    await refreshMatches(false);
     return;
   }
   await handleAlarm(alarm);
@@ -80,5 +80,3 @@ chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     return true;
   }
 });
-
-refreshMatches(true);
