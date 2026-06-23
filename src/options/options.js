@@ -6,6 +6,7 @@ import {
 import { getSettings, saveSettings } from '../lib/storage.js';
 import { searchTeams } from '../lib/api.js';
 import { escapeHtml } from '../lib/utils.js';
+import { TIMEZONES, getTimezoneLabel } from '../lib/timezones.js';
 
 let settings = null;
 let enabledSet = new Set();
@@ -46,14 +47,22 @@ async function init() {
 }
 
 function populateTimezoneOptions() {
-  const zones = Intl.supportedValuesOf('timeZone');
-  for (const zone of zones) {
+  for (const { id, label } of TIMEZONES) {
     const opt = document.createElement('option');
-    opt.value = zone;
-    opt.textContent = zone.replace(/_/g, ' ');
+    opt.value = id;
+    opt.textContent = label;
     els.timezone.appendChild(opt);
   }
-  els.timezone.value = settings.timezone || 'auto';
+
+  const saved = settings.timezone || 'auto';
+  if (saved !== 'auto' && !TIMEZONES.some((tz) => tz.id === saved)) {
+    const opt = document.createElement('option');
+    opt.value = saved;
+    opt.textContent = getTimezoneLabel(saved);
+    els.timezone.appendChild(opt);
+  }
+
+  els.timezone.value = saved;
 }
 
 function bindValues() {

@@ -83,6 +83,14 @@ function bindEvents() {
   document.getElementById('settings-btn').addEventListener('click', () => {
     chrome.runtime.openOptionsPage();
   });
+
+  els.matchList.addEventListener(
+    'error',
+    (e) => {
+      if (e.target.matches('img.crest-img')) e.target.hidden = true;
+    },
+    true
+  );
 }
 
 async function loadData(force = false) {
@@ -221,7 +229,7 @@ function renderMatchCard(match) {
   const fav = isFavorite(match);
 
   const crest = (url, alt) =>
-    url ? `<img src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" onerror="this.style.display='none'" />` : '';
+    url ? `<img class="crest-img" src="${escapeHtml(url)}" alt="${escapeHtml(alt)}" />` : '';
 
   return `
     <article class="match-card${fav ? ' favorite' : ''}" data-match-id="${match.id}">

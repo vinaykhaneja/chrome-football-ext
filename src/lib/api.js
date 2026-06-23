@@ -6,6 +6,7 @@ const API_BASE = 'https://api.football-data.org/v4';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const LIVE_CACHE_TTL_MS = 60 * 1000;
 const BATCH_SIZE = 8;
+const MAX_FETCH_DAYS = 8; // yesterday through +8 days = 10 calendar days (API max)
 
 export function normalizeMatch(raw) {
   const status = mapStatus(raw.status);
@@ -66,7 +67,7 @@ function mapStatus(apiStatus) {
 function getDateWindow() {
   return {
     dateFrom: toDateString(addDays(new Date(), -1)),
-    dateTo: toDateString(addDays(new Date(), 14)),
+    dateTo: toDateString(addDays(new Date(), MAX_FETCH_DAYS)),
   };
 }
 
@@ -77,7 +78,7 @@ function getSeasonYears() {
 
 function pruneStaleMatches(matches) {
   const cutoff = Date.now() - 36 * 60 * 60 * 1000;
-  const horizon = addDays(new Date(), 15).getTime();
+  const horizon = addDays(new Date(), MAX_FETCH_DAYS).getTime();
 
   return matches.filter((m) => {
     const kickoff = new Date(m.utcDate).getTime();
